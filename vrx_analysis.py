@@ -58,8 +58,12 @@ def main(argv):
     # ----------------------------------------------------------------
     print("Npackets = {}".format(npackets))
 
-    capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={'udp.port==320':'ptp'}, display_filter='udp.port == 320')
     tframe = Decimal(1001/60000) #1/59.94
+    B = Decimal(1.1)
+    tdrain = tframe / npackets / B
+    print("Tdrain = {}".format(tdrain))
+
+    capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={'udp.port==320':'ptp'}, display_filter='udp.port == 320')
     videoalignmentpoint = 0
     videoalignmentpointpacketnumber = 0
     timestampoffset = 0
@@ -153,9 +157,6 @@ def main(argv):
 
     except KeyboardInterrupt:
       print("\nInterrupted")
-
-    tdrain = tframe / npackets / B
-    print("Tdrain = {}".format(tdrain))
 
 
 def usage():
