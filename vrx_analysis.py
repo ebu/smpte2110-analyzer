@@ -70,7 +70,6 @@ def main(argv):
     try:
         for idx, pkt in enumerate(capture):
            if int(pkt.udp.port) == 320 and int(pkt.ptp.v2_messageid) == 8:
-               #print("",pkt.number)
                PTPtime = Decimal(pkt.ptp.v2_fu_preciseorigintimestamp_seconds) + Decimal(pkt.ptp.v2_fu_preciseorigintimestamp_nanoseconds) / 1000000000
                #print("PTP Seconds : ",pkt.number, pkt.sniff_timestamp, PTPtime)
                print("Message ID: ",pkt.ptp.v2_messageid)
@@ -99,15 +98,15 @@ def main(argv):
     TROdefault = tframe * 43 / 1125
     markers = []
     timestampInit = 0
-    timestampCurr = 0
+
     timestampPrev = 0
     TRoffset = 0
     FrameCounter = 0
     rcv_pkt_counter = 0
     drain_pkt_counter = 0
-    drain_time = 0
 
-    print ("Trs: ",Trs)
+
+    print ("Trs = ",Trs)
     
     # Reading the PCAP file 
     capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={decode_str:'rtp'}, display_filter='ip.dst==' + group)
@@ -123,7 +122,7 @@ def main(argv):
             if int(pkt.number) > int(videoalignmentpointpacketnumber):
                 # count the received packets
                 rcv_pkt_counter = rcv_pkt_counter + 1
-                print("J: ",J, rcv_pkt_counter, drain_pkt_counter, rcv_pkt_counter - drain_pkt_counter, end="\r")
+                #print("J: ",J, rcv_pkt_counter, drain_pkt_counter, rcv_pkt_counter - drain_pkt_counter, end="\r")
                 
                 if flag == True:
                     # First packet of Frame TPR0
@@ -139,8 +138,9 @@ def main(argv):
  
                 # VRXbuff drain 
                 # (videoalignmentpoint + (FrameCounter-1)*tframe) + TRoffset + J * Trs -> packet J drains.
-                drain_time = (Decimal(videoalignmentpoint) + Decimal((FrameCounter-1)*tframe) + TROdefault + Decimal(J * Trs))
-                drain_pkt_counter = math.floor(drain_pkt_counter + drain_time / (Decimal(pkt.sniff_timestamp) + Decimal(timestampoffset)))
+                J = J + 1
+                drain_time = (Decimal(videoalignmentpoint) + Decimal((FrameCounter-1)*tframe) + TRoffset + Decimal(J * Trs))
+                drain_pkt_counter += math.floor(drain_time / (Decimal(pkt.sniff_timestamp) + Decimal(timestampoffset)))
 
                 if (rcv_pkt_counter - drain_pkt_counter) > 0:
                     VRXbuff.append((rcv_pkt_counter - drain_pkt_counter))
@@ -148,15 +148,33 @@ def main(argv):
                     print ("ALERT")
                     VRXbuff.append(0)
 
-                J = J + 1
- 
+
             timestampPrev = timestampCurr
         print("----")
+        print("rcv_pkt_counter:   ", rcv_pkt_counter)
+        print("drain_pkt_counter: ", drain_pkt_counter)
+
+        print("TRoffset:    ", TRoffset)
         print("VRXbuff MAX: ", numpy.max(VRXbuff))
         print("VRXbuff AVG: ", numpy.average(VRXbuff))
 
     except KeyboardInterrupt:
       print("\nInterrupted")
+
+    print("Result in: ",capfile + "_" + ".txt")
+    write_array(capfile + "_VRXbuff" + ".txt", VRXbuff)
+
+
+def write_array(filename, array):
+    text_file = open(filename, "w")
+
+    idx = 0
+    while idx < len(array):
+        text_file.write(str(array[idx]) + "\n")
+        idx = idx + 1
+
+    text_file.close()
+    return 0
 
 
 def usage():
