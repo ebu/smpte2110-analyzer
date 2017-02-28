@@ -44,6 +44,7 @@ def main(argv):
             usage()
             sys.exit()
     decode_str = "udp.port=" + "50000"
+    #decode_str = "udp.port=" + "5000"
 
     # filtering capture with marker to find nb packets per field
     global capture_marker
@@ -135,6 +136,21 @@ def main(argv):
     print("minimim = ", numpy.min(timediffs))
     print("Reference Time  :", Decimal(time) - Decimal(initialtime))
 
+    print("Result in: ",capfile + "_" + ".txt")
+    write_array(capfile + "_" + ".txt", cfull)
+
+
+def write_array(filename, array):
+    text_file = open(filename, "w")
+
+    idx = 0
+
+    while idx < len(array):
+        text_file.write(str(array[idx]) + "\n")
+        idx = idx + 1
+
+    text_file.close()
+    return 0
 
 def usage():
     print("analyzer.py -c|--cap <capture_file>")
