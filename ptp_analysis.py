@@ -77,6 +77,7 @@ def main(argv):
                 PTPtime = t1 + TimeOffset + PropagationDelay
                 print("TimeOffset           : ", TimeOffset)
                 print("PropagationDelay     : ", PropagationDelay)
+                print("pkt.time             : ", pkt.sniff_timestamp)
                 print("Offset with pkt.time : ", timestampoffset)
                 print("PTP time             : ", PTPtime)
 
