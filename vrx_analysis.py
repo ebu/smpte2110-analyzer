@@ -63,26 +63,53 @@ def main(argv):
     tdrain = tframe / npackets / B
     print("Tdrain = {}".format(tdrain))
 
-    capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={'udp.port==320':'ptp'}, display_filter='udp.port == 320')
-    videoalignmentpoint = 0
-    videoalignmentpointpacketnumber = 0
-    timestampoffset = 0
+    t1 = 0
+    t2 = 0
+    t3 = 0
+    t4 = 0
+    PTPcheckOnce = False
+
+    capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={'udp.port==319':'ptp', 'udp.port==320':'ptp'}, display_filter='udp.port == 319 or udp.port == 320')
     try:
         for idx, pkt in enumerate(capture):
-           if int(pkt.udp.port) == 320 and int(pkt.ptp.v2_messageid) == 8:
-               PTPtime = Decimal(pkt.ptp.v2_fu_preciseorigintimestamp_seconds) + Decimal(pkt.ptp.v2_fu_preciseorigintimestamp_nanoseconds) / 1000000000
-               #print("PTP Seconds : ",pkt.number, pkt.sniff_timestamp, PTPtime)
-               print("Message ID: ",pkt.ptp.v2_messageid)
-               print("Frame # since Epoch  : ",math.floor(PTPtime/tframe))
-               print("Video Alignment Point: ", Decimal (math.floor(PTPtime/tframe) * tframe))
-               print("Offset with pkt.time : ", PTPtime - Decimal(pkt.sniff_timestamp))
-               if videoalignmentpoint == 0:
-                   videoalignmentpoint = Decimal (math.floor(PTPtime/tframe) * tframe)
-                   #timestampoffset = PTPtime - Decimal(pkt.sniff_timestamp)
-                   videoalignmentpointpacketnumber = pkt.number
-               timestampoffset = PTPtime - Decimal(pkt.sniff_timestamp) #use last ptp timestamp.
+            if int(pkt.udp.port) == 319 and int(pkt.ptp.v2_messageid) == 0:
+                t1 = Decimal(pkt.sniff_timestamp)
+                print("Sync Message     : ", t1)
+
+            if int(pkt.udp.port) == 320 and int(pkt.ptp.v2_messageid) == 8:
+                t2 = Decimal(pkt.ptp.v2_fu_preciseorigintimestamp_seconds) + Decimal(pkt.ptp.v2_fu_preciseorigintimestamp_nanoseconds) / 1000000000
+                print("Follow_Up Message: ", t2)
+
+            if int(pkt.udp.port) == 319 and int(pkt.ptp.v2_messageid) == 1:
+                t3 = Decimal(pkt.sniff_timestamp)
+                print("Delay_req Message: ", t3)
+
+            if int(pkt.udp.port) == 320 and int(pkt.ptp.v2_messageid) == 9:
+                t4 = Decimal(pkt.ptp.v2_dr_receivetimestamp_seconds) + Decimal(pkt.ptp.v2_dr_receivetimestamp_nanoseconds) / 1000000000
+                print("Delay_resp Message: ",t4)
+
+            if t4 != 0 and PTPcheckOnce == False:
+                TimeOffset = t2 - t1
+                PropagationDelay = (t4 - (t3 + TimeOffset)) / 2
+                timestampoffset = TimeOffset + PropagationDelay
+                PTPtime = t1 + TimeOffset + PropagationDelay
+                print("TimeOffset           : ", TimeOffset)
+                print("PropagationDelay     : ", PropagationDelay)
+                print("Offset with pkt.time : ", timestampoffset)
+                print("PTP time             : ", PTPtime)
+
+                videoalignmentpointpacketnumber = pkt.number
+                print("videoalignmentpointpacketnumber :", videoalignmentpointpacketnumber)
+                videoalignmentpoint = Decimal(math.floor(PTPtime / tframe) * tframe)
+                print("videoalignmentpoint             :", videoalignmentpoint)
+                print("Frame # since Epoch             :", math.floor(PTPtime / tframe))
+                print("--------------------------------------------------------------------------------")
+
+                t4 = 0
+                PTPcheckOnce = True
+
     except KeyboardInterrupt:
-      print("\nInterrupted")
+        print("\nInterrupted")
 
       
     # ---------------------------
@@ -138,7 +165,8 @@ def main(argv):
  
                 # VRXbuff drain 
                 # (videoalignmentpoint + (FrameCounter-1)*tframe) + TRoffset + J * Trs -> packet J drains.
-                J = J + 1
+
+
                 drain_time = (Decimal(videoalignmentpoint) + Decimal((FrameCounter-1)*tframe) + TRoffset + Decimal(J * Trs))
                 drain_pkt_counter += math.floor(drain_time / (Decimal(pkt.sniff_timestamp) + Decimal(timestampoffset)))
 
@@ -147,6 +175,8 @@ def main(argv):
                 else:
                     print ("ALERT")
                     VRXbuff.append(0)
+
+                J = J + 1
 
 
             timestampPrev = timestampCurr
