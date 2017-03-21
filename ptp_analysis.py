@@ -47,10 +47,7 @@ def main(argv):
             print("unknown option " + opt)
             usage()
             sys.exit()
-    decode_str = "udp.port=" + "5000"
 
-    # filtering capture with marker to find nb packets per field
-    global capture_marker
     TFRAME = Decimal(1001 / 60000)  # 1/59.94
 
     t1 = None
@@ -59,6 +56,9 @@ def main(argv):
     t4 = None
     sync_msg_seq_id = 0
     delr_msg_seq_id = 0
+    propagation_delay = None
+    time_offset = None
+
 
     capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={'udp.port==319':'ptp', 'udp.port==320':'ptp'}, display_filter='udp.port == 319 or udp.port == 320')
     try:
@@ -90,28 +90,32 @@ def main(argv):
                         print("Delay_resp Message : ",t4)
 
             if t1 != None and t2 != None:
-                TimeOffset = t2 - t1
-                #t1 = None
+                time_offset = t2 - t1
                 t2 = None
-            if t3 != None and t4 != None:
 
-                PropagationDelay = (t4 - (t3 + TimeOffset)) / 2
-                timestampoffset = TimeOffset + PropagationDelay
-                PTPtime = t1 + TimeOffset + PropagationDelay
-                print("TimeOffset           : ", TimeOffset)
-                print("PropagationDelay     : ", PropagationDelay)
+            if t3 != None and t4 != None:
+                propagation_delay = (t4 - (t3 + time_offset)) / 2
+                t4 = None
+
+            if time_offset != None and propagation_delay != None:
+                timestampoffset = time_offset + propagation_delay
+                ptp_time = t1 + time_offset + propagation_delay
+
+                print("time_offset          : ", time_offset)
+                print("propagation_delay    : ", propagation_delay)
                 print("pkt.time             : ", pkt.sniff_timestamp)
                 print("Offset with pkt.time : ", timestampoffset)
-                print("PTP time             : ", PTPtime)
+                print("PTP time             : ", ptp_time)
 
                 videoalignmentpointpacketnumber = pkt.number
+                videoalignmentpoint = Decimal(math.floor(ptp_time / TFRAME) * TFRAME)
                 print("videoalignmentpointpacketnumber :", videoalignmentpointpacketnumber)
-                videoalignmentpoint = Decimal(math.floor(PTPtime / TFRAME) * TFRAME)
                 print("videoalignmentpoint             :", videoalignmentpoint)
-                print("Frame # since Epoch             :", math.floor(PTPtime / TFRAME))
+                print("Frame # since Epoch             :", math.floor(ptp_time / TFRAME))
                 print("--------------------------------------------------------------------------------")
+                time_offset = None
+                propagation_delay = None
 
-                t4 = None
 
     except KeyboardInterrupt:
         print("\nInterrupted")

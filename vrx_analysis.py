@@ -1,19 +1,102 @@
-#!/usr/bin/python3
+from decimal import Decimal
 
 import sys
-
-if sys.version_info < (3, 0):
-    print("needs python 3")
-    sys.exit(2)
-
 import getopt
+import numpy as np
 import pyshark
-import numpy
 import math
-from decimal import *
+
+RTP_CLOCK = 90000
+
+def frame_len(capture):
+    # To calculate Npackets, you need to count the amount of packets between two rtp.marker == 1 flags.
+    # This is as easy as looking to 2 rtp.marker == 1 packets and substract the rtp.sequence number.
+    # The exception that might occurs is that the packet sequence number rotates.
+
+    first_frame = None
+    for pkt in capture:
+        if pkt.rtp.marker == '1':
+            if not first_frame:
+                first_frame = int(pkt.rtp.seq)
+            else:
+                return int(pkt.rtp.seq) - first_frame
+    return None
 
 
-def main(argv):
+def frame_rate(capture):
+    # To calculate the framerate of a given capture, you need to look at three consequent rtp time stamps [(t2-t1) +
+    # (t3-t2)] / 2 will result in the average timestamp difference. Note:  the frame periods (difference between 90
+    # kHz timestamps) might not appear constant For example 60/1.001 Hz frame periods effectively alternate between
+    # increments of 1501 and 1502 ticks of the 90 kHz clock.
+    rtp_timestamp = []
+
+    for pkt in capture:
+        if pkt.rtp.marker == '1':
+            if len(rtp_timestamp) < 3:
+                rtp_timestamp.append(int(pkt.rtp.timestamp))
+            else:
+                frame_rate_c = Decimal(RTP_CLOCK /
+                    (((rtp_timestamp[2] - rtp_timestamp[1]) + (rtp_timestamp[1] - rtp_timestamp[0])) / 2))
+                return frame_rate_c
+    return None
+
+
+def vrx(capture, trs, tframe, npackets):
+    res = []
+    tvd = 0
+    prev = None  # previous packet
+    frame_idx = 0  # frame index
+    initial_tm = None  # first frame timestamp
+    drained = 0
+    drained_prev = 0
+    vrx_prev = 0
+    vrx_curr = 0
+    for pkt in capture:
+        cur_tm = Decimal(pkt.sniff_timestamp)  # current timestamp
+        if prev and prev.rtp.marker == '1':  # new frame
+            if frame_idx == 0:  # first frame
+                # Should use each first packet as a Tvd
+                initial_tm = cur_tm
+            tvd = initial_tm + frame_idx * tframe
+            drained = drained_prev = 0
+            frame_idx += 1
+
+        if initial_tm:
+
+            # should not drain any more packet after time: Tvd + Npackets * Trs
+            # drained = int((cur_tm - initial_tm) / trs)
+            if (cur_tm - tvd) < (tvd + npackets * trs):
+                drained = math.ceil((cur_tm - tvd + trs) / trs)
+
+            vrx_curr = vrx_prev + 1 - (drained - drained_prev)
+            if vrx_curr < 0:
+                vrx_curr = 0
+                print("VRX buffer underrun")
+
+            drained_prev = drained
+
+        res.append(vrx_curr)
+        vrx_prev = vrx_curr
+        prev = pkt
+
+    return res
+
+
+def write_array(filename, array):
+    text_file = open(filename, "w")
+
+    idx = 0
+    while idx < len(array):
+        text_file.write(str(array[idx]) + "\n")
+        idx += 1
+
+    text_file.close()
+    return None
+
+def usage():
+    print("vrx_analysis.py -c|--cap <capture_file> -g|--group <multicast_group>")
+
+def getarguments(argv):
     try:
         opts, args = getopt.getopt(argv, "hc:g:", ["help", "cap=", "group="])
         if not opts:
@@ -24,9 +107,6 @@ def main(argv):
         print("Error in options {}".format(opts))
         usage()
         sys.exit(2)
-
-    global capfile
-    global group
 
     for opt, arg in opts:
         if opt in ("-h", "--help"):
@@ -40,176 +120,32 @@ def main(argv):
             print("unknown option " + opt)
             usage()
             sys.exit()
-    decode_str = "udp.port=" + "5000"
+    return (capfile, group)
 
-   # filtering capture with marker to find nb packets per field
-    global capture_marker
-    sequencenumber = []
-
-    capture_marker = pyshark.FileCapture(capfile, keep_packets=False, decode_as={decode_str:'rtp'}, display_filter='ip.dst==' + group + ' && rtp.marker == 1')
-    
-    for pkt in capture_marker:
-        sequencenumber.append(pkt.rtp.seq)
-
-    print("Frames: ", len(sequencenumber))
-    # -- Should protect next fomula: sequence numbers will overflow --
-    # ----------------------------------------------------------------
-    npackets = int(sequencenumber[-1]) + 0 - int(sequencenumber[-2])
-    # ----------------------------------------------------------------
-    print("Npackets = {}".format(npackets))
-
-    tframe = Decimal(1001/60000) #1/59.94
-    B = Decimal(1.1)
-    tdrain = tframe / npackets / B
-    print("Tdrain = {}".format(tdrain))
-
-    t1 = 0
-    t2 = 0
-    t3 = 0
-    t4 = 0
-    PTPcheckOnce = False
-
-    capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={'udp.port==319':'ptp', 'udp.port==320':'ptp'}, display_filter='udp.port == 319 or udp.port == 320')
-    try:
-        for idx, pkt in enumerate(capture):
-            if int(pkt.udp.port) == 319 and int(pkt.ptp.v2_messageid) == 0:
-                t1 = Decimal(pkt.sniff_timestamp)
-                print("Sync Message     : ", t1)
-
-            if int(pkt.udp.port) == 320 and int(pkt.ptp.v2_messageid) == 8:
-                t2 = Decimal(pkt.ptp.v2_fu_preciseorigintimestamp_seconds) + Decimal(pkt.ptp.v2_fu_preciseorigintimestamp_nanoseconds) / 1000000000
-                print("Follow_Up Message: ", t2)
-
-            if int(pkt.udp.port) == 319 and int(pkt.ptp.v2_messageid) == 1:
-                t3 = Decimal(pkt.sniff_timestamp)
-                print("Delay_req Message: ", t3)
-
-            if int(pkt.udp.port) == 320 and int(pkt.ptp.v2_messageid) == 9:
-                t4 = Decimal(pkt.ptp.v2_dr_receivetimestamp_seconds) + Decimal(pkt.ptp.v2_dr_receivetimestamp_nanoseconds) / 1000000000
-                print("Delay_resp Message: ",t4)
-
-            if t4 != 0 and PTPcheckOnce == False:
-                TimeOffset = t2 - t1
-                PropagationDelay = (t4 - (t3 + TimeOffset)) / 2
-                timestampoffset = TimeOffset + PropagationDelay
-                PTPtime = t1 + TimeOffset + PropagationDelay
-                print("TimeOffset           : ", TimeOffset)
-                print("PropagationDelay     : ", PropagationDelay)
-                print("Offset with pkt.time : ", timestampoffset)
-                print("PTP time             : ", PTPtime)
-
-                videoalignmentpointpacketnumber = pkt.number
-                print("videoalignmentpointpacketnumber :", videoalignmentpointpacketnumber)
-                videoalignmentpoint = Decimal(math.floor(PTPtime / tframe) * tframe)
-                print("videoalignmentpoint             :", videoalignmentpoint)
-                print("Frame # since Epoch             :", math.floor(PTPtime / tframe))
-                print("--------------------------------------------------------------------------------")
-
-                t4 = 0
-                PTPcheckOnce = True
-
-    except KeyboardInterrupt:
-        print("\nInterrupted")
-
-      
-    # ---------------------------
-    # VRXbuffer -----------------
-    # ---------------------------
-    # Definition of the variables
-    # ---------------------------
-
-    J = 0
-    VRXbuff = []
-    Ractive = Decimal(1080 / 1125)
-    Trs = Decimal(tframe * Ractive / npackets)
-    TROdefault = tframe * 43 / 1125
-    markers = []
-    timestampInit = 0
-
-    timestampPrev = 0
-    TRoffset = 0
-    FrameCounter = 0
-    rcv_pkt_counter = 0
-    drain_pkt_counter = 0
-
-
-    print ("Trs = ",Trs)
-    
-    # Reading the PCAP file 
-    capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={decode_str:'rtp'}, display_filter='ip.dst==' + group)
-
-    flag = False
-    try:
-        for idx, pkt in enumerate(capture):
-            timestampCurr = pkt.sniff_timestamp
-            if timestampInit == 0:
-                timestampInit = pkt.sniff_timestamp
-
-            # Start after first PTP packet.    
-            if int(pkt.number) > int(videoalignmentpointpacketnumber):
-                # count the received packets
-                rcv_pkt_counter = rcv_pkt_counter + 1
-                #print("J: ",J, rcv_pkt_counter, drain_pkt_counter, rcv_pkt_counter - drain_pkt_counter, end="\r")
-                
-                if flag == True:
-                    # First packet of Frame TPR0
-                    flag = False
-                    J = 0
-                    FrameCounter = FrameCounter + 1
-                    TRoffset = (Decimal(pkt.sniff_timestamp) + Decimal(timestampoffset)) - videoalignmentpoint - (FrameCounter-1)*tframe
-                    print("TPR0: ",FrameCounter, pkt.number, VRXbuff[-1],(Decimal(pkt.sniff_timestamp) + Decimal(timestampoffset)), TRoffset, Decimal(timestampCurr)-Decimal(timestampPrev))
-                if int(pkt.rtp.marker) == 1: # rt.marker == 1 indicates last packet of frame.
-                    #Set flag true to indicate next packet is start of new frame.
-                    flag = True
-                    markers.append(pkt.number)
- 
-                # VRXbuff drain 
-                # (videoalignmentpoint + (FrameCounter-1)*tframe) + TRoffset + J * Trs -> packet J drains.
-
-
-                drain_time = (Decimal(videoalignmentpoint) + Decimal((FrameCounter-1)*tframe) + TRoffset + Decimal(J * Trs))
-                drain_pkt_counter += math.floor(drain_time / (Decimal(pkt.sniff_timestamp) + Decimal(timestampoffset)))
-
-                if (rcv_pkt_counter - drain_pkt_counter) > 0:
-                    VRXbuff.append((rcv_pkt_counter - drain_pkt_counter))
-                else:
-                    print ("ALERT")
-                    VRXbuff.append(0)
-
-                J = J + 1
-
-
-            timestampPrev = timestampCurr
-        print("----")
-        print("rcv_pkt_counter:   ", rcv_pkt_counter)
-        print("drain_pkt_counter: ", drain_pkt_counter)
-
-        print("TRoffset:    ", TRoffset)
-        print("VRXbuff MAX: ", numpy.max(VRXbuff))
-        print("VRXbuff AVG: ", numpy.average(VRXbuff))
-
-    except KeyboardInterrupt:
-      print("\nInterrupted")
-
-    print("Result in: ",capfile + "_" + ".txt")
-    write_array(capfile + "_VRXbuff" + ".txt", VRXbuff)
-
-
-def write_array(filename, array):
-    text_file = open(filename, "w")
-
-    idx = 0
-    while idx < len(array):
-        text_file.write(str(array[idx]) + "\n")
-        idx = idx + 1
-
-    text_file.close()
-    return 0
-
-
-def usage():
-    print("analyzer.py -c|--cap <capture_file>")
-    print("<max_packets> : use \"-\" for all capture")
 
 if __name__ == '__main__':
-    main(sys.argv[1:])
+    RACTIVE = Decimal(1080 / 1125)
+    B = Decimal(1.1)
+
+    capfile, group = getarguments(sys.argv[1:])
+
+    capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={'udp.port==50000': 'rtp'},
+                                  display_filter='ip.dst==' + group + ' && rtp.marker == 1')
+    frame_ln = frame_len(capture)
+    print("Npackets  : ", frame_ln)
+
+    framerate = frame_rate(capture)
+    print("Frame Frequency: ", round(framerate, 2), " Hz")
+    tframe = 1 / framerate
+
+    trs = tframe * RACTIVE / frame_ln
+
+
+    capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={'udp.port==50000': 'rtp'},
+                                  display_filter='ip.dst==' + group)
+    vrx_buf = vrx(capture, trs, tframe, frame_ln)
+
+    print("VRX max: ", np.max(vrx_buf))
+    #np.save('vrx_' + capfile, np.asarray(vrx_buf))
+    write_array('vrx_' + capfile + '.txt', vrx_buf)
+
