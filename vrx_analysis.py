@@ -97,11 +97,11 @@ def usage():
     print("vrx_analysis.py -c|--cap <capture_file> -g|--group <multicast_group> -p|--port <udp_port>")
 
 def getarguments(argv):
-    short_opts = 'hc:g:p'
+    short_opts = 'hc:g:p:'
     long_opts  = ["help", "cap=", "group=", "port="]
 
     try:
-        opts, args = getopt.getopt(argv,short_opts, long_opts)
+        opts, args = getopt.getopt(argv, short_opts, long_opts)
         if not opts:
             print("No options supplied")
             usage()
@@ -134,7 +134,7 @@ if __name__ == '__main__':
 
     capfile, group, port = getarguments(sys.argv[1:])
 
-    capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={'udp.port==50000': 'rtp'},
+    capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={"udp.port=" + port: 'rtp'},
                                   display_filter='ip.dst==' + group + ' && rtp.marker == 1')
     frame_ln = frame_len(capture)
     print("Npackets  : ", frame_ln)
@@ -146,7 +146,7 @@ if __name__ == '__main__':
     trs = tframe * RACTIVE / frame_ln
 
 
-    capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={'udp.port==50000': 'rtp'},
+    capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={"udp.port=" + port: 'rtp'},
                                   display_filter='ip.dst==' + group)
     vrx_buf = vrx(capture, trs, tframe, frame_ln)
 
