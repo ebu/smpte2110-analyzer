@@ -94,11 +94,14 @@ def write_array(filename, array):
     return None
 
 def usage():
-    print("vrx_analysis.py -c|--cap <capture_file> -g|--group <multicast_group>")
+    print("vrx_analysis.py -c|--cap <capture_file> -g|--group <multicast_group> -p|--port <udp_port>")
 
 def getarguments(argv):
+    short_opts = 'hc:g:p'
+    long_opts  = ["help", "cap=", "group=", "port="]
+
     try:
-        opts, args = getopt.getopt(argv, "hc:g:", ["help", "cap=", "group="])
+        opts, args = getopt.getopt(argv,short_opts, long_opts)
         if not opts:
             print("No options supplied")
             usage()
@@ -116,18 +119,20 @@ def getarguments(argv):
             capfile = arg
         elif opt in ("-g", "--group"):
             group = arg
+        elif opt in ("-p", "--port"):
+            port = arg
         else:
             print("unknown option " + opt)
             usage()
             sys.exit()
-    return (capfile, group)
+    return (capfile, group, port)
 
 
 if __name__ == '__main__':
     RACTIVE = Decimal(1080 / 1125)
     B = Decimal(1.1)
 
-    capfile, group = getarguments(sys.argv[1:])
+    capfile, group, port = getarguments(sys.argv[1:])
 
     capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={'udp.port==50000': 'rtp'},
                                   display_filter='ip.dst==' + group + ' && rtp.marker == 1')
