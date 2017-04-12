@@ -11,14 +11,15 @@ import pyshark
 import math
 from decimal import *
 
-PTP_PORT_1 = 319 # Server to Client -> Sync_Message and Deley_Req_Message
-PTP_PORT_2 = 320 # Client to Server -> follow_up Message and Delay_resp Messae
-MSG_ID_SYNC_MSG   = 0
-MSG_ID_FOLLOW_UP  = 8
-MSG_ID_DELAY_REQ  = 1
+PTP_PORT_1 = 319  # Server to Client -> Sync_Message and Deley_Req_Message
+PTP_PORT_2 = 320  # Client to Server -> follow_up Message and Delay_resp Message
+MSG_ID_SYNC_MSG = 0
+MSG_ID_FOLLOW_UP = 8
+MSG_ID_DELAY_REQ = 1
 MSG_ID_DELAY_RESP = 9
 UDP = 17
 PTP_V2 = 2
+
 
 def main(argv):
     try:
@@ -121,9 +122,9 @@ def main(argv):
         print("\nInterrupted")
 
 
+
 def usage():
-    print("analyzer.py -c|--cap <capture_file>")
-    print("<max_packets> : use \"-\" for all capture")
+    print("ptp_analysis.py -c|--cap <capture_file> -g|--group <multicast_group>")
 
 
 if __name__ == '__main__':

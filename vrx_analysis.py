@@ -42,8 +42,12 @@ def frame_rate(capture):
 
 
 def vrx(capture, trs, tframe, npackets):
+    # This function calculates the proposed VRX leaky buffer model proposed in SMPTE 2110-21
+    # To be done: link the video Transmission Datum (tvd) to the Video Alignment Point (vap)
+    # The Video Alignment Point is aligned to the PTP clock
+
     res = []
-    tvd = 0
+    tvd = 0  # video transmission datum
     prev = None  # previous packet
     frame_idx = 0  # frame index
     initial_tm = None  # first frame timestamp
