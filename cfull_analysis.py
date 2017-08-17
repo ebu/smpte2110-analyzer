@@ -12,7 +12,7 @@ B = 1.1  # Drain factor as defined in SMPTE2110-21
 def frame_len(capture):
     # To calculate Npackets, you need to count the amount of packets between two rtp.marker == 1 flags.
     # This is as easy as looking to 2 rtp.marker == 1 packets and substract the rtp.sequence number.
-    # The exception that might occurs is that the packet sequence number rotates.
+    # The exception will occur, the packet sequence number rotates: Modulo is your friend!!
 
     first_frame = None
     for pkt in capture:
@@ -20,7 +20,7 @@ def frame_len(capture):
             if not first_frame:
                 first_frame = int(pkt.rtp.seq)
             else:
-                return int(pkt.rtp.seq) - first_frame
+                return (int(pkt.rtp.seq) - first_frame) % 65536
     return None
 
 
@@ -157,8 +157,7 @@ def getarguments(argv):
 if __name__ == '__main__':
     capfile, group, port = getarguments(sys.argv[1:])
 
-    capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={"udp.port=" + port: 'rtp'},
-                                  display_filter='ip.dst==' + group + ' && rtp.marker == 1')
+    capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={"udp.port=" + port: 'rtp'}, display_filter='ip.dst==' + group + ' && rtp.marker == 1')
     frame_ln = frame_len(capture)
     print("Npackets  : ", frame_ln)
 
