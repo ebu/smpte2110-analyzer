@@ -20,7 +20,7 @@ def frame_len(capture):
             if not first_frame:
                 first_frame = int(pkt.rtp.seq)
             else:
-                return int(pkt.rtp.seq) - first_frame
+                return (int(pkt.rtp.seq) - first_frame) % 65536
     return None
 
 
@@ -156,18 +156,14 @@ def getarguments(argv):
 
 if __name__ == '__main__':
     capfile, group, port = getarguments(sys.argv[1:])
-
     capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={"udp.port=" + port: 'rtp'},
                                   display_filter='ip.dst==' + group + ' && rtp.marker == 1')
     frame_ln = frame_len(capture)
     print("Npackets  : ", frame_ln)
-
     framerate = frame_rate(capture)
     print("Frame Frequency: ", round(framerate, 2), " Hz")
     tframe = 1 / framerate
-
     capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={"udp.port=" + port: 'rtp'},
                                   display_filter='ip.dst==' + group)
     cfull_array = cfull_analysis(capture, tframe, frame_ln, B)
-
     write_array(capfile + "_cfull_" + ".txt", cfull_array)
