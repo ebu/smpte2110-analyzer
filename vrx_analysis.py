@@ -11,7 +11,7 @@ RTP_CLOCK = 90000
 def frame_len(capture):
     # To calculate Npackets, you need to count the amount of packets between two rtp.marker == 1 flags.
     # This is as easy as looking to 2 rtp.marker == 1 packets and substract the rtp.sequence number.
-    # The exception that might occurs is that the packet sequence number rotates.
+    # The exception that will occurs is that the packet sequence number rotates. Modulo is your friend!
 
     first_frame = None
     for pkt in capture:
@@ -19,9 +19,8 @@ def frame_len(capture):
             if not first_frame:
                 first_frame = int(pkt.rtp.seq)
             else:
-                return int(pkt.rtp.seq) - first_frame
+                return (int(pkt.rtp.seq) - first_frame) % 65536
     return None
-
 
 def frame_rate(capture):
     # To calculate the framerate of a given capture, you need to look at three consequent rtp time stamps [(t2-t1) +
