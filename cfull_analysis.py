@@ -5,6 +5,7 @@ import math
 import sys
 from decimal import *
 
+RTP_TIMESTAMP_BIT_DEPTH = pow(2,32) # The RTP timestamp value is defined as a 32 bit number.
 RTP_CLOCK = 90000  # RTP clock Frequency is defined at 90kHz
 B = 1.1  # Drain factor as defined in SMPTE2110-21
 
@@ -12,7 +13,7 @@ B = 1.1  # Drain factor as defined in SMPTE2110-21
 def frame_len(capture):
     # To calculate Npackets, you need to count the amount of packets between two rtp.marker == 1 flags.
     # This is as easy as looking to 2 rtp.marker == 1 packets and substract the rtp.sequence number.
-    # The exception will occur, the packet sequence number rotates: Modulo is your friend!!
+    # The exception that will occurs is that the packet sequence number rotates. Modulo is your friend!
 
     first_frame = None
     for pkt in capture:
@@ -37,8 +38,12 @@ def frame_rate(capture):
                 rtp_timestamp.append(int(pkt.rtp.timestamp))
             else:
                 frame_rate_c = Decimal(RTP_CLOCK /
-                                       (((rtp_timestamp[2] - rtp_timestamp[1]) + (
-                                           rtp_timestamp[1] - rtp_timestamp[0])) / 2))
+                    (( (rtp_timestamp[2] - rtp_timestamp[1]) % RTP_TIMESTAMP_BIT_DEPTH +
+                       (rtp_timestamp[1] - rtp_timestamp[0]) % RTP_TIMESTAMP_BIT_DEPTH) / 2))
+
+#                frame_rate_c = Decimal(RTP_CLOCK /
+#                                       (((rtp_timestamp[2] - rtp_timestamp[1]) + (
+#                                           rtp_timestamp[1] - rtp_timestamp[0])) / 2))
                 return frame_rate_c
     return None
 
