@@ -5,6 +5,7 @@ import math
 import sys
 from decimal import *
 
+
 RTP_TIMESTAMP_BIT_DEPTH = pow(2,32) # The RTP timestamp value is defined as a 32 bit number.
 RTP_CLOCK = 90000  # RTP clock Frequency is defined at 90kHz
 B = 1.1  # Drain factor as defined in SMPTE2110-21
