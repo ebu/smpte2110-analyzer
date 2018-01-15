@@ -1,0 +1,14 @@
+<application>
+  <component name="PyTestFrameworkService">
+    <option name="SDK_TO_PYTEST">
+      <map>
+        <entry key="/Library/Frameworks/Python.framework/Versions/3.6/bin/python3.6" value="false" />
+      </map>
+    </option>
+    <option name="SDK_TO_NOSETEST">
+      <map>
+        <entry key="/Library/Frameworks/Python.framework/Versions/3.6/bin/python3.6" value="false" />
+      </map>
+    </option>
+  </component>
+</application>
