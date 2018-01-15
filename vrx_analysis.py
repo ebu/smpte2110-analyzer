@@ -1,12 +1,42 @@
-from decimal import Decimal
-
-import sys
 import getopt
-import numpy as np
 import pyshark
+import numpy
 import math
+import sys
+from decimal import *
 
-RTP_CLOCK = 90000
+
+
+PKT_SEQUENCE_BIT_DEPTH  = pow(2,16) # The RTP packet sequence number is defined as a 16 bit number.
+RTP_TIMESTAMP_BIT_DEPTH = pow(2,32) # The RTP timestamp value is defined as a 32 bit number.
+RTP_CLOCK = 90000                   # RTP clock Frequency is defined at 90kHz.
+B = 1.1                             # Drain factor as defined in SMPTE2110-21.
+RACTIVE = Decimal(1080 / 1125)      # Is the ratio of active time to total time within the frame period.
+
+def get_rtp_time(pkt_rtp_timestamp, pkt_timestamp):
+    # This function calculates the time represented within the RTP.Timestamp field of the RTP packet
+    # We assume the packet timestamp has been given by the local clock, this one is synced to PTP
+    # The RTP timestamp is continuous, this means: no leap seconds. This must be correct in one or the other way
+    # to be able to compare the RTP value with the current Time value.
+    # TAI: Temps Atomique International
+
+    rtp_timestamp = Decimal(pkt_rtp_timestamp) / Decimal(RTP_CLOCK)
+    rtp_timestamp_wraparround = int(Decimal(pkt_timestamp) / Decimal(RTP_TIMESTAMP_BIT_DEPTH / RTP_CLOCK))
+    rtp_time = rtp_timestamp_wraparround * Decimal(RTP_TIMESTAMP_BIT_DEPTH / RTP_CLOCK) + rtp_timestamp
+
+    # Convert TAI time to UTC time
+    # NEEDS TO BE DONE CORRECT, for now just use 37 seconds
+    leap_seconds = 37
+
+    return rtp_time + leap_seconds
+
+def time_read_spacing (tframe,frame_ln):
+    # Trs is the time between removing adjacent packets from the Virtual Receiver Buffer during the frame/field
+
+    if frame_len:
+        return tframe * RACTIVE / frame_ln
+    else:
+        return None
 
 def frame_len(capture):
     # To calculate Npackets, you need to count the amount of packets between two rtp.marker == 1 flags.
@@ -19,7 +49,7 @@ def frame_len(capture):
             if not first_frame:
                 first_frame = int(pkt.rtp.seq)
             else:
-                return (int(pkt.rtp.seq) - first_frame) % 65536
+                return (int(pkt.rtp.seq) - first_frame) % PKT_SEQUENCE_BIT_DEPTH
     return None
 
 def frame_rate(capture):
@@ -35,7 +65,8 @@ def frame_rate(capture):
                 rtp_timestamp.append(int(pkt.rtp.timestamp))
             else:
                 frame_rate_c = Decimal(RTP_CLOCK /
-                    (((rtp_timestamp[2] - rtp_timestamp[1]) + (rtp_timestamp[1] - rtp_timestamp[0])) / 2))
+                    (( (rtp_timestamp[2] - rtp_timestamp[1]) % RTP_TIMESTAMP_BIT_DEPTH +
+                       (rtp_timestamp[1] - rtp_timestamp[0]) % RTP_TIMESTAMP_BIT_DEPTH) / 2))
                 return frame_rate_c
     return None
 
@@ -85,12 +116,13 @@ def write_array(filename, array):
     text_file = open(filename, "w")
 
     idx = 0
+
     while idx < len(array):
         text_file.write(str(array[idx]) + "\n")
         idx += 1
 
     text_file.close()
-    return None
+    return 0
 
 def usage():
     print("vrx_analysis.py -c|--cap <capture_file> -g|--group <multicast_group> -p|--port <udp_port>")
@@ -128,9 +160,6 @@ def getarguments(argv):
 
 
 if __name__ == '__main__':
-    RACTIVE = Decimal(1080 / 1125)
-    B = Decimal(1.1)
-
     capfile, group, port = getarguments(sys.argv[1:])
 
     capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={"udp.port=" + port: 'rtp'},
@@ -142,6 +171,7 @@ if __name__ == '__main__':
     print("Frame Frequency: ", round(framerate, 2), " Hz")
     tframe = 1 / framerate
 
+    # Trs is the time between removing adjacent packets from the Virtual Receiver Buffer during the frame/field (Time-Read-Spacing).
     trs = tframe * RACTIVE / frame_ln
 
 
@@ -149,7 +179,7 @@ if __name__ == '__main__':
                                   display_filter='ip.dst==' + group)
     vrx_buf = vrx(capture, trs, tframe, frame_ln)
 
-    print("VRX max: ", np.max(vrx_buf))
+    print("VRX max: ", max(vrx_buf))
     #np.save('vrx_' + capfile, np.asarray(vrx_buf))
-    write_array('vrx_' + capfile + '.txt', vrx_buf)
+    write_array(capfile + '.txt', vrx_buf)
 
