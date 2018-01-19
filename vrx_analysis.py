@@ -102,8 +102,8 @@ def vrx(capture, trs, tframe, npackets):
 
             vrx_curr = vrx_prev + 1 - (drained - drained_prev)
             if vrx_curr < 0:
+                print("VRX buffer underrun " + str(vrx_curr))
                 vrx_curr = 0
-                print("VRX buffer underrun")
 
             drained_prev = drained
 
