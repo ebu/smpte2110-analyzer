@@ -13,7 +13,7 @@ PKT_SEQUENCE_BIT_DEPTH  = pow(2,16) # The RTP packet sequence number is defined 
 RTP_TIMESTAMP_BIT_DEPTH = pow(2,32) # The RTP timestamp value is defined as a 32 bit number.
 RTP_CLOCK = 90000                   # RTP clock Frequency is defined at 90kHz.
 B = 1.1                             # Drain factor as defined in SMPTE2110-21.
-RACTIVE = Decimal(1080 / 1125)      # Is the ratio of active time to total time within the frame period.
+RACTIVE = Decimal(1080) / 1125      # Is the ratio of active time to total time within the frame period.
 
 def get_rtp_time(pkt_rtp_timestamp, pkt_timestamp):
     # This function calculates the time represented within the RTP.Timestamp field of the RTP packet
