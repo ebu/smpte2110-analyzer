@@ -5,7 +5,7 @@ import math
 import sys
 from decimal import *
 
-
+PKT_SEQUENCE_BIT_DEPTH  = pow(2,16) # The RTP packet sequence number is defined as a 16 bit number.
 RTP_TIMESTAMP_BIT_DEPTH = pow(2,32) # The RTP timestamp value is defined as a 32 bit number.
 RTP_CLOCK = 90000  # RTP clock Frequency is defined at 90kHz
 B = 1.1  # Drain factor as defined in SMPTE2110-21
@@ -22,7 +22,7 @@ def frame_len(capture):
             if not first_frame:
                 first_frame = int(pkt.rtp.seq)
             else:
-                return (int(pkt.rtp.seq) - first_frame) % 65536
+                return (int(pkt.rtp.seq) - first_frame) % PKT_SEQUENCE_BIT_DEPTH
     return None
 
 
