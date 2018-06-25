@@ -72,7 +72,7 @@ def cfull_analysis(capture, tframe, npackets, B):
     try:
         for idx, pkt in enumerate(capture):
 
-            time = Decimal(pkt.sniff_timestamp)
+            time = Decimal(pkt.time)
 
             if initialtime == 0:
                 # Record initial timing of the PCAP file
@@ -174,7 +174,7 @@ if __name__ == '__main__':
     tframe = 1 / framerate
 
     capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={"udp.port=" + port: 'rtp'},
-                                  display_filter='ip.dst==' + group)
+                                  display_filter='ip.dst==' + group, only_summaries=True)
     cfull_array = cfull_analysis(capture, tframe, frame_ln, B)
 
     write_array(capfile + "_cfull_" + ".txt", cfull_array)
