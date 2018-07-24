@@ -12,33 +12,7 @@ from decimal import *
 PKT_SEQUENCE_BIT_DEPTH  = pow(2,16) # The RTP packet sequence number is defined as a 16 bit number.
 RTP_TIMESTAMP_BIT_DEPTH = pow(2,32) # The RTP timestamp value is defined as a 32 bit number.
 RTP_CLOCK = 90000                   # RTP clock Frequency is defined at 90kHz.
-B = 1.1                             # Drain factor as defined in SMPTE2110-21.
 RACTIVE = Decimal(1080) / 1125      # Is the ratio of active time to total time within the frame period.
-
-def get_rtp_time(pkt_rtp_timestamp, pkt_timestamp):
-    # This function calculates the time represented within the RTP.Timestamp field of the RTP packet
-    # We assume the packet timestamp has been given by the local clock, this one is synced to PTP
-    # The RTP timestamp is continuous, this means: no leap seconds. This must be correct in one or the other way
-    # to be able to compare the RTP value with the current Time value.
-    # TAI: Temps Atomique International
-
-    rtp_timestamp = Decimal(pkt_rtp_timestamp) / Decimal(RTP_CLOCK)
-    rtp_timestamp_wraparround = int(Decimal(pkt_timestamp) / Decimal(RTP_TIMESTAMP_BIT_DEPTH / RTP_CLOCK))
-    rtp_time = rtp_timestamp_wraparround * Decimal(RTP_TIMESTAMP_BIT_DEPTH / RTP_CLOCK) + rtp_timestamp
-
-    # Convert TAI time to UTC time
-    # NEEDS TO BE DONE CORRECT, for now just use 37 seconds
-    leap_seconds = 37
-
-    return rtp_time + leap_seconds
-
-def time_read_spacing (tframe,frame_ln):
-    # Trs is the time between removing adjacent packets from the Virtual Receiver Buffer during the frame/field
-
-    if frame_len:
-        return tframe * RACTIVE / frame_ln
-    else:
-        return None
 
 def frame_len(capture):
     # To calculate Npackets, you need to count the amount of packets between two rtp.marker == 1 flags.
