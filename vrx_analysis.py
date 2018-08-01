@@ -59,7 +59,7 @@ def vrx(capture, trs, tframe, npackets):
     vrx_curr = 0
     for pkt in capture:
         cur_tm = Decimal(pkt.sniff_timestamp)  # current timestamp
-        if prev and prev.rtp.marker == '1':  # new frame
+        if prev and hasattr(prev, 'rtp') and prev.rtp.marker == '1':  # new frame
             if frame_idx == 0:  # first frame
                 # Should use each first packet as a Tvd
                 initial_tm = cur_tm
