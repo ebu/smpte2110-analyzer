@@ -93,7 +93,7 @@ def main(argv):
                 time_offset = t2 - t1
                 t2 = None
 
-            if t3 != None and t4 != None:
+            if t3 != None and t4 != None and time_offset != None:
                 propagation_delay = (t4 - (t3 + time_offset)) / 2
                 t4 = None
 
