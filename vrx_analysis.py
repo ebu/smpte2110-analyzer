@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/local/bin/python3
 
 import getopt
 import pyshark
@@ -46,10 +46,16 @@ def frame_rate(capture):
                 return frame_rate_c
     return None
 
+def rtp_to_time(cur_tm, rtp_timestamp):
+    time = Decimal(0)
 
-def vrx(capture, trs, tframe, npackets):
+    time = math.floor(cur_tm / Decimal(RTP_TIMESTAMP_BIT_DEPTH / RTP_CLOCK)) * (RTP_TIMESTAMP_BIT_DEPTH / RTP_CLOCK) 
+    time = time + rtp_timestamp/RTP_CLOCK
+
+    return Decimal(time)
+
+def vrx(capture, trs, tframe, npackets, troffset):
     res = []
-    tvd = 0
     prev = None  # previous packet
     frame_idx = 0  # frame index
     initial_tm = None  # first frame timestamp
@@ -57,22 +63,27 @@ def vrx(capture, trs, tframe, npackets):
     drained_prev = 0
     vrx_prev = 0
     vrx_curr = 0
+
     for pkt in capture:
         cur_tm = Decimal(pkt.sniff_timestamp)  # current timestamp
         if prev and hasattr(prev, 'rtp') and prev.rtp.marker == '1':  # new frame
             if frame_idx == 0:  # first frame
                 # Should use each first packet as a Tvd
                 initial_tm = cur_tm
-            tvd = initial_tm + frame_idx * tframe
+                print("Arrival Time Packet j=0:",cur_tm)
+                print("N Frames since Epoch:",int(cur_tm/tframe))
+                print("N * Tframe:",Decimal(int(cur_tm/tframe)*tframe),"s")
+                print("RTP Time:",rtp_to_time(cur_tm,int(pkt.rtp.timestamp)),"s")
+                print("Delta RTP versus N*Tframe",rtp_to_time(cur_tm,int(pkt.rtp.timestamp))-Decimal(int(cur_tm/tframe)*tframe),"s")
+
+            tvd = Decimal(int(cur_tm/tframe)*tframe) + troffset
             drained = drained_prev = 0
+            vrx_prev = 0
             frame_idx += 1
 
         if initial_tm:
 
-            # should not drain any more packet after time: Tvd + Npackets * Trs
-            # drained = int((cur_tm - initial_tm) / trs)
-            if (cur_tm - tvd) < (tvd + npackets * trs):
-                drained = math.ceil((cur_tm - tvd + trs) / trs)
+            drained = math.ceil((Decimal(cur_tm) - Decimal(tvd)) / Decimal(trs))
 
             vrx_curr = vrx_prev + 1 - (drained - drained_prev)
             if vrx_curr < 0:
@@ -84,7 +95,6 @@ def vrx(capture, trs, tframe, npackets):
         res.append(vrx_curr)
         vrx_prev = vrx_curr
         prev = pkt
-
     return res
 
 
@@ -138,22 +148,26 @@ def getarguments(argv):
 if __name__ == '__main__':
     capfile, group, port = getarguments(sys.argv[1:])
 
+
+    troffset = Decimal(0.000747)
+
     capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={"udp.port=" + port: 'rtp'},
                                   display_filter='ip.dst==' + group + ' && rtp.marker == 1')
     frame_ln = frame_len(capture)
-    print("Npackets  : ", frame_ln)
+    print("Npackets: ", frame_ln)
 
     framerate = frame_rate(capture)
-    print("Frame Frequency: ", round(framerate, 2), " Hz")
+    print("Framerate: ", round(framerate, 2),"Hz")
     tframe = 1 / framerate
 
     # Trs is the time between removing adjacent packets from the Virtual Receiver Buffer during the frame/field (Time-Read-Spacing).
-    trs = tframe * RACTIVE / frame_ln
+    trs = float(tframe * RACTIVE / frame_ln)
+    print("Trs: ", round(trs*pow(10,6), 3),"µs")
 
 
     capture = pyshark.FileCapture(capfile, keep_packets=False, decode_as={"udp.port=" + port: 'rtp'},
                                   display_filter='ip.dst==' + group)
-    vrx_buf = vrx(capture, trs, tframe, frame_ln)
+    vrx_buf = vrx(capture, trs, tframe, frame_ln, troffset)
 
     print("VRX max: ", max(vrx_buf))
     #np.save('vrx_' + capfile, np.asarray(vrx_buf))
